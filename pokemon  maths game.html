@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pokémon Math RPG - 恆等式與因式分解篇</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                        mono: ['VT323', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0f172a; /* Slate 900 */
+        }
+        
+        .pixelated {
+            image-rendering: pixelated;
+        }
+
+        /* Screen Shake Animation */
+        @keyframes screenShake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-10px, 8px) rotate(-1.5deg); }
+            40% { transform: translate(10px, -8px) rotate(1.5deg); }
+            60% { transform: translate(-8px, -5px) rotate(-1deg); }
+            80% { transform: translate(8px, 5px) rotate(1deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        /* Charging Pulse Animation */
+        @keyframes chargePulse {
+            0% { filter: brightness(1) drop-shadow(0 0 0px #f59e0b); transform: scale(1); }
+            50% { filter: brightness(1.8) drop-shadow(0 0 25px #f59e0b); transform: scale(1.15); }
+            100% { filter: brightness(1) drop-shadow(0 0 0px #f59e0b); transform: scale(1); }
+        }
+
+        /* Floating Damage Text */
+        @keyframes floatDamage {
+            0% { opacity: 0; transform: translateY(0) scale(0.5); }
+            25% { opacity: 1; transform: translateY(-30px) scale(1.4); }
+            75% { opacity: 1; transform: translateY(-45px) scale(1); }
+            100% { opacity: 0; transform: translateY(-65px) scale(0.8); }
+        }
+
+        /* Battle Animations */
+        @keyframes tacklePlayer {
+            0% { transform: translate(0, 0) scale(1); }
+            40% { transform: translate(-15px, 15px) scale(0.95); }
+            70% { transform: translate(60px, -60px) scale(1.2); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes tackleEnemy {
+            0% { transform: translate(0, 0) scale(1); }
+            40% { transform: translate(15px, -15px) scale(0.95); }
+            70% { transform: translate(-60px, 60px) scale(1.2); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes blinkHit {
+            0%, 100% { opacity: 1; filter: none; }
+            20%, 60% { opacity: 0.1; filter: brightness(3) drop-shadow(0 0 15px #ef4444); }
+            40%, 80% { opacity: 0.9; filter: brightness(2) drop-shadow(0 0 10px #f97316); }
+        }
+        @keyframes faintAnim {
+            0% { transform: translateY(0); opacity: 1; filter: grayscale(0%); }
+            100% { transform: translateY(70px); opacity: 0; filter: grayscale(100%); }
+        }
+
+        .shake { animation: screenShake 0.45s cubic-bezier(.36,.07,.19,.97) both; }
+        .charge { animation: chargePulse 0.6s ease-in-out; }
+        .tackle-player { animation: tacklePlayer 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .tackle-enemy { animation: tackleEnemy 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .blink { animation: blinkHit 0.25s ease-in-out 2; }
+        .faint { animation: faintAnim 0.7s ease-in forwards; }
+
+        /* Custom HP Bar Colors */
+        .hp-high { background-color: #22c55e; } /* Green */
+        .hp-med { background-color: #eab308; }  /* Yellow */
+        .hp-low { background-color: #ef4444; }  /* Red */
+
+        /* HUD Panels retro styling */
+        .hud-panel {
+            border: 3px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .platform-shadow {
+            box-shadow: inset 0 -5px 15px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+
+<body class="h-screen w-screen overflow-hidden flex flex-col justify-center items-center select-none touch-manipulation">
+    
+    <!-- App Container (Responsive) -->
+    <div id="gameContainer" class="w-full max-w-md h-full sm:h-[88vh] sm:rounded-2xl flex flex-col bg-black relative shadow-2xl overflow-hidden sm:border-8 sm:border-slate-800">
+        
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="absolute inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center space-y-6">
+            <div class="relative w-16 h-16">
+                <div class="w-16 h-16 rounded-full border-4 border-slate-700 bg-white overflow-hidden relative animate-spin">
+                    <div class="absolute top-0 left-0 w-full h-1/2 bg-red-500 border-b-4 border-slate-700"></div>
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full border-4 border-slate-700 z-10"></div>
+                </div>
+            </div>
+            <div class="text-center">
+                <p class="text-white font-bold tracking-widest animate-pulse font-mono text-lg">載入中...</p>
+                <p class="text-xs text-blue-400 font-mono mt-1">Junior Sec. Math 2A: Chapter 2 題庫準備中</p>
+            </div>
+        </div>
+
+        <!-- ================= BATTLE ARENA (TOP) ================= -->
+        <div id="battleArena" class="flex-[3.2] relative bg-cover bg-center transition-all duration-1000 overflow-hidden">
+            
+            <!-- Canvas for Super Attack Particle FX -->
+            <canvas id="fxCanvas" class="absolute inset-0 z-30 pointer-events-none w-full h-full"></canvas>
+
+            <!-- Enemy Side (Top Right) -->
+            <div class="absolute top-[45%] right-[5%] w-[45%] h-[12%] rounded-[100%] platform-shadow bg-black/25 blur-[1px] z-0" id="enemyPlatform"></div>
+            
+            <!-- Enemy Sprite -->
+            <div class="absolute top-[14%] right-[10%] z-20 flex justify-center w-[38%] h-[42%]">
+                <img id="enemySprite" class="h-full object-contain pixelated drop-shadow-2xl transition-all" src="" alt="Enemy">
+            </div>
+
+            <!-- Enemy HUD -->
+            <div id="enemyHud" class="absolute top-4 left-4 z-20 w-48 bg-white/95 hud-panel rounded-bl-xl rounded-tr-xl p-2.5">
+                <div class="flex justify-between items-end mb-1">
+                    <span id="enemyNameHud" class="font-bold text-slate-800 text-sm tracking-wide">---</span>
+                    <span id="enemyLevelHud" class="text-[10px] font-bold text-slate-500 font-mono">Lv50</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-2.5 p-[2px]">
+                    <div class="hp-fill hp-high h-full rounded-full transition-all duration-500 w-full"></div>
+                </div>
+            </div>
+            <!-- Enemy Party Balls -->
+            <div class="absolute top-1 right-2 flex space-x-1 z-20 bg-black/50 px-2 py-0.5 rounded-full" id="enemyParty"></div>
+
+            <!-- Player Side (Bottom Left) -->
+            <div class="absolute bottom-[10%] left-[5%] w-[55%] h-[15%] rounded-[100%] platform-shadow bg-black/25 blur-[1px] z-0" id="playerPlatform"></div>
+            
+            <!-- Player Sprite -->
+            <div class="absolute bottom-[12%] left-[8%] z-20 flex justify-center w-[48%] h-[48%]">
+                <img id="playerSprite" class="h-full object-contain pixelated drop-shadow-2xl transition-all" src="" alt="Player">
+            </div>
+
+            <!-- Player HUD -->
+            <div id="playerHud" class="absolute bottom-4 right-4 z-20 w-52 bg-white/95 hud-panel rounded-tl-xl rounded-br-xl p-2.5">
+                <div class="flex justify-between items-end mb-1">
+                    <span id="playerNameHud" class="font-bold text-slate-800 text-sm tracking-wide">---</span>
+                    <span id="playerLevelHud" class="text-[10px] font-bold text-slate-500 font-mono">Lv50</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-2.5 p-[2px]">
+                    <div class="hp-fill hp-high h-full rounded-full transition-all duration-500 w-full"></div>
+                </div>
+                <div class="text-right mt-1">
+                    <span id="playerHpText" class="text-xs font-bold text-slate-700 font-mono tracking-widest">---/---</span>
+                </div>
+            </div>
+            <!-- Player Party Balls -->
+            <div class="absolute bottom-1 left-2 flex space-x-1 z-20 bg-black/50 px-2 py-0.5 rounded-full" id="playerParty"></div>
+        </div>
+
+        <!-- ================= CONTROL PANEL (BOTTOM) ================= -->
+        <div id="uiPanel" class="flex-[1.8] bg-slate-800 border-t-[6px] border-slate-700 p-2 sm:p-3 flex flex-col relative">
+            
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 10px 10px;"></div>
+
+            <!-- 1. Dialog Box (Typewriter) -->
+            <div id="dialogBox" class="absolute inset-2 sm:inset-3 bg-white border-[6px] border-slate-700 rounded-xl p-3 sm:p-4 z-10 hidden shadow-inner">
+                <p id="dialogText" class="text-base sm:text-lg font-bold text-slate-800 leading-relaxed tracking-wide"></p>
+                <i class="fa-solid fa-caret-down absolute bottom-3 right-4 text-slate-500 animate-bounce"></i>
+            </div>
+
+            <!-- 2. Main Action Menu -->
+            <div id="actionMenu" class="absolute inset-2 sm:inset-3 bg-slate-800 border-[6px] border-slate-600 rounded-xl p-1.5 z-0 flex shadow-lg hidden">
+                <div class="w-1/2 p-2 flex flex-col justify-center border-r-4 border-slate-600 bg-slate-700/50 rounded-l-lg">
+                    <p class="text-white text-sm sm:text-base font-bold tracking-widest">要做什麼呢？</p>
+                    <p class="text-[10px] text-yellow-400 font-mono mt-1"><i class="fa-solid fa-graduation-cap mr-1"></i>2A Ch2 恆等式戰鬥</p>
+                </div>
+                <div class="w-1/2 grid grid-cols-2 gap-2 p-1.5 ml-1">
+                    <button onclick="showMoveMenu()" class="bg-red-500 hover:bg-red-400 text-white font-bold rounded-lg shadow-[0_4px_0_#991b1b] active:shadow-[0_0px_0_#991b1b] active:translate-y-1 transition-all text-sm sm:text-base flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-bolt"></i> 戰鬥
+                    </button>
+                    <button onclick="showPokemonSwitchMenu()" class="bg-green-500 hover:bg-green-400 text-white font-bold rounded-lg shadow-[0_4px_0_#166534] active:shadow-[0_0px_0_#166534] active:translate-y-1 transition-all text-sm sm:text-base flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-users"></i> 精靈
+                    </button>
+                    <button class="bg-amber-500 text-white font-bold rounded-lg shadow-[0_4px_0_#b45309] opacity-50 cursor-not-allowed text-xs sm:text-sm">
+                        道具
+                    </button>
+                    <button class="bg-blue-500 text-white font-bold rounded-lg shadow-[0_4px_0_#1e3a8a] opacity-50 cursor-not-allowed text-xs sm:text-sm">
+                        逃跑
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. Move Selection Menu -->
+            <div id="moveMenu" class="absolute inset-2 sm:inset-3 bg-slate-100 border-[6px] border-slate-700 rounded-xl z-20 hidden shadow-xl">
+                <div class="flex h-full">
+                    <div id="moveList" class="w-2/3 grid grid-cols-2 gap-1.5 p-1.5 bg-white rounded-l-md">
+                        <!-- Moves injected by JS -->
+                    </div>
+                    <div class="w-1/3 border-l-[4px] border-slate-300 p-2 flex flex-col justify-between bg-slate-200 rounded-r-md">
+                        <div class="space-y-1">
+                            <div class="bg-slate-300 px-1 py-0.5 rounded">
+                                <p class="text-[9px] font-bold text-slate-600">屬性 TYPE</p>
+                                <p id="moveTypeHover" class="text-xs font-bold uppercase tracking-wider">---</p>
+                            </div>
+                            <div class="bg-slate-300 px-1 py-0.5 rounded">
+                                <p class="text-[9px] font-bold text-slate-600">威力 PWR</p>
+                                <p id="movePowerHover" class="text-xs font-bold font-mono">---</p>
+                            </div>
+                        </div>
+                        <button onclick="hideMoveMenu()" class="text-xs bg-slate-400 hover:bg-slate-500 text-white py-1 px-2 rounded-lg font-bold shadow transition active:scale-95">返回</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= MODALS ================= -->
+        <!-- Math Question Modal -->
+        <div id="mathModal" class="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md hidden flex-col items-center justify-center p-3">
+            <div class="bg-white border-[6px] border-indigo-600 rounded-2xl p-4 sm:p-5 w-full max-w-md shadow-2xl relative overflow-hidden transform scale-95 transition-transform" id="mathModalContent">
+                
+                <div class="flex items-center justify-between bg-indigo-100 p-2 rounded-lg mb-3">
+                    <span class="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center">
+                        <i class="fa-solid fa-graduation-cap text-indigo-600 mr-1.5 text-base"></i>
+                        Book 2A Ch 2 恆等式與因式分解
+                    </span>
+                    <span id="mathTopicBadge" class="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-full">2.1 恆等式</span>
+                </div>
+                
+                <div class="bg-slate-900 text-emerald-400 p-3.5 rounded-xl border-[3px] border-slate-700 mb-4 text-center min-h-[90px] flex items-center justify-center shadow-inner">
+                    <p id="mathQuestionText" class="text-base sm:text-xl font-bold font-mono tracking-wide leading-relaxed"></p>
+                </div>
+                
+                <!-- Options Grid -->
+                <div id="mathOptions" class="grid grid-cols-1 gap-2">
+                    <!-- Options injected here -->
+                </div>
+                
+                <div id="mathFeedback" class="mt-3 text-center font-bold text-base sm:text-lg hidden py-1.5 rounded-lg"></div>
+            </div>
+        </div>
+
+        <!-- Pokemon Switch Modal -->
+        <div id="switchModal" class="fixed inset-0 z-50 bg-slate-900/95 hidden flex-col p-4 sm:p-6 overflow-y-auto">
+            <h2 class="text-white text-xl font-bold mb-4 border-b-2 border-slate-700 pb-2 flex justify-between items-center">
+                <span>選擇同行精靈</span>
+                <i class="fa-solid fa-xmark text-slate-400 hover:text-white cursor-pointer text-2xl" onclick="hideSwitchModal()"></i>
+            </h2>
+            <div id="partyList" class="flex flex-col space-y-3 flex-1 overflow-y-auto pb-4">
+                <!-- Party members injected here -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* ================= DICTIONARIES & CONSTANTS ================= */
+        const PLAYER_IDS = [25, 6, 9, 3, 143, 448];     // 皮卡丘, 噴火龍, 水箭龜, 妙蛙花, 卡比獸, 路卡利歐
+        const ENEMY_IDS = [94, 149, 150, 444, 373, 248];   // 耿鬼, 快龍, 超夢, 烈咬陸鯊, 暴飛龍, 班基拉斯
+
+        const POKEMON_NAMES_TC = {
+            25: '皮卡丘', 6: '噴火龍', 9: '水箭龜', 3: '妙蛙花',
+            94: '耿鬼', 149: '快龍', 143: '卡比獸', 150: '超夢',
+            448: '路卡利歐', 444: '烈咬陸鯊', 373: '暴飛龍', 248: '班基拉斯'
+        };
+
+        const TYPE_TRANSLATIONS = {
+            normal: '一般', fire: '火', water: '水', electric: '電', grass: '草',
+            ice: '冰', fighting: '格鬥', poison: '毒', ground: '地面', flying: '飛行',
+            psychic: '超能', bug: '蟲', rock: '岩石', ghost: '幽靈', dragon: '龍',
+            dark: '惡', steel: '鋼', fairy: '妖精'
+        };
+
+        const TYPE_COLORS = {
+            normal: '#A8A878', fire: '#F08030', water: '#6890F0', electric: '#F8D030',
+            grass: '#78C850', ice: '#98D8D8', fighting: '#C03028', poison: '#A040A0',
+            ground: '#E0C068', flying: '#A890F0', psychic: '#F85888', bug: '#A8B820',
+            rock: '#B8A038', ghost: '#705898', dragon: '#7038F8', dark: '#705848',
+            steel: '#B8B8D0', fairy: '#EE99AC'
+        };
+
+        const MOVE_POOL = {
+            fire: [{name: '噴射火焰', power: 90}, {name: '大字爆炎', power: 120}],
+            water: [{name: '水炮', power: 110}, {name: '衝浪', power: 90}],
+            grass: [{name: '日光束', power: 120}, {name: '飛葉風暴', power: 130}],
+            electric: [{name: '十萬伏特', power: 90}, {name: '打雷', power: 120}],
+            ghost: [{name: '暗影球', power: 90}, {name: '禍不單行', power: 80}],
+            dragon: [{name: '龍之波動', power: 90}, {name: '逆鱗', power: 120}],
+            psychic: [{name: '精神強念', power: 90}, {name: '精神擊碎', power: 100}],
+            normal: [{name: '泰山壓頂', power: 85}, {name: '破壞光線', power: 150}],
+            flying: [{name: '暴風', power: 110}, {name: '空氣斬', power: 80}],
+            ground: [{name: '地震', power: 100}, {name: '大地之力', power: 90}],
+            fighting: [{name: '波導彈', power: 90}, {name: '近身戰', power: 120}],
+            rock: [{name: '尖石攻擊', power: 100}, {name: '岩崩', power: 75}]
+        };
+
+        /* ================= GAME STATE ================= */
+        const gameState = {
+            playerTeam: [],
+            enemyTeam: [],
+            activePlayerIdx: 0,
+            activeEnemyIdx: 0,
+            get playerActive() { return this.playerTeam[this.activePlayerIdx]; },
+            get enemyActive() { return this.enemyTeam[this.activeEnemyIdx]; }
+        };
+
+        let mathResolve = null;
+
+        /* ================= DATA FETCHING ================= */
+        async function fetchPokemonDataFast(id) {
+            const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+            const data = await res.json();
+            
+            const types = data.types.map(t => t.type.name);
+            
+            let assignedMoves = [];
+            let primaryPool = MOVE_POOL[types[0]] || MOVE_POOL.normal;
+            assignedMoves.push({ ...primaryPool[0], type: types[0] });
+            assignedMoves.push({ ...primaryPool[1] || primaryPool[0], type: types[0] });
+            
+            const allTypes = Object.keys(MOVE_POOL);
+            for(let i=0; i<2; i++) {
+                let rType = allTypes[Math.floor(Math.random() * allTypes.length)];
+                let rMove = MOVE_POOL[rType][Math.floor(Math.random() * MOVE_POOL[rType].length)];
+                assignedMoves.push({ ...rMove, type: rType });
+            }
+
+            return {
+                id: data.id,
+                name: POKEMON_NAMES_TC[id] || data.name.toUpperCase(),
+                hp: data.stats[0].base_stat * 3.2,
+                maxHp: data.stats[0].base_stat * 3.2,
+                attack: data.stats[1].base_stat,
+                defense: data.stats[2].base_stat,
+                types: types,
+                moves: assignedMoves,
+                frontSprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`,
+                backSprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/back/${id}.gif`,
+                fainted: false
+            };
+        }
+
+        /* ================= INITIALIZATION ================= */
+        window.onload = async () => {
+            try {
+                const [pData, eData] = await Promise.all([
+                    Promise.all(PLAYER_IDS.map(id => fetchPokemonDataFast(id))),
+                    Promise.all(ENEMY_IDS.map(id => fetchPokemonDataFast(id)))
+                ]);
+                
+                gameState.playerTeam = pData;
+                gameState.enemyTeam = eData;
+                
+                document.getElementById('loadingScreen').classList.add('hidden');
+                
+                initPokeballs();
+                updateArenaBackground();
+                updateBattleScene();
+                
+                await typeWriter(`野生的 ${gameState.enemyActive.name} 出現了！`);
+                await typeWriter(`去吧！${gameState.playerActive.name}！`);
+                showActionMenu();
+                
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loadingScreen').innerHTML = '<p class="text-rose-500 font-bold p-4 text-center">載入 PokeAPI 資料失敗。<br>請檢查網路連線或重新整理網頁。</p>';
+            }
+        };
+
+        /* ================= UI UPDATES ================= */
+        async function typeWriter(text) {
+            const dialog = document.getElementById('dialogBox');
+            const action = document.getElementById('actionMenu');
+            const dText = document.getElementById('dialogText');
+            
+            action.classList.add('hidden');
+            document.getElementById('moveMenu').classList.add('hidden');
+            dialog.classList.remove('hidden');
+            
+            dText.innerHTML = '';
+            for(let i=0; i<text.length; i++) {
+                dText.innerHTML += text.charAt(i);
+                await new Promise(r => setTimeout(r, 22));
+            }
+            await new Promise(r => setTimeout(r, 900));
+        }
+
+        function showActionMenu() {
+            document.getElementById('dialogBox').classList.add('hidden');
+            document.getElementById('moveMenu').classList.add('hidden');
+            document.getElementById('actionMenu').classList.remove('hidden');
+        }
+
+        function updateArenaBackground() {
+            const arena = document.getElementById('battleArena');
+            const type = gameState.enemyActive.types[0];
+            let gradient = '';
+            
+            if(['grass', 'bug'].includes(type)) gradient = 'linear-gradient(to bottom, #7DD3FC 0%, #BAE6FD 45%, #4ADE80 50%, #166534 100%)';
+            else if(['water', 'ice'].includes(type)) gradient = 'linear-gradient(to bottom, #BAE6FD 0%, #7DD3FC 45%, #3B82F6 50%, #1E3A8A 100%)';
+            else if(['fire'].includes(type)) gradient = 'linear-gradient(to bottom, #500724 0%, #9F1239 45%, #EA580C 50%, #7C2D12 100%)';
+            else if(['electric'].includes(type)) gradient = 'linear-gradient(to bottom, #1E1B4B 0%, #312E81 45%, #EAB308 50%, #854D0E 100%)';
+            else if(['rock', 'ground', 'fighting'].includes(type)) gradient = 'linear-gradient(to bottom, #E0F2FE 0%, #FFEDD5 45%, #D97706 50%, #78350F 100%)';
+            else if(['ghost', 'dark', 'poison'].includes(type)) gradient = 'linear-gradient(to bottom, #0F172A 0%, #334155 45%, #581C87 50%, #000000 100%)';
+            else gradient = 'linear-gradient(to bottom, #E0F2FE 0%, #F1F5F9 45%, #94A3B8 50%, #475569 100%)';
+            
+            arena.style.backgroundImage = gradient;
+        }
+
+        function updateBattleScene() {
+            const p = gameState.playerActive;
+            const e = gameState.enemyActive;
+
+            document.getElementById('playerNameHud').innerText = p.name;
+            document.getElementById('enemyNameHud').innerText = e.name;
+            
+            const pSprite = document.getElementById('playerSprite');
+            const eSprite = document.getElementById('enemySprite');
+            
+            pSprite.src = p.backSprite;
+            pSprite.classList.remove('faint');
+            
+            eSprite.src = e.frontSprite;
+            eSprite.classList.remove('faint');
+            
+            updateHpBars();
+        }
+
+        function updateHpBars() {
+            const p = gameState.playerActive;
+            const e = gameState.enemyActive;
+            
+            _setHpWidth('playerHud', p.hp, p.maxHp);
+            _setHpWidth('enemyHud', e.hp, e.maxHp);
+            
+            document.getElementById('playerHpText').innerText = `${Math.ceil(p.hp)}/${p.maxHp}`;
+        }
+
+        function _setHpWidth(hudId, current, max) {
+            const percent = Math.max(0, (current / max) * 100);
+            const bar = document.querySelector(`#${hudId} .hp-fill`);
+            bar.style.width = `${percent}%`;
+            
+            bar.classList.remove('hp-high', 'hp-med', 'hp-low');
+            if (percent > 50) bar.classList.add('hp-high');
+            else if (percent > 20) bar.classList.add('hp-med');
+            else bar.classList.add('hp-low');
+        }
+
+        function initPokeballs() {
+            _renderBalls('playerParty', gameState.playerTeam);
+            _renderBalls('enemyParty', gameState.enemyTeam);
+        }
+
+        function updatePokeballs(side) {
+            if(side === 'player') _renderBalls('playerParty', gameState.playerTeam);
+            else _renderBalls('enemyParty', gameState.enemyTeam);
+        }
+
+        function _renderBalls(containerId, team) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            team.forEach(p => {
+                const color = p.fainted ? 'text-slate-700 opacity-50' : (containerId === 'playerParty' ? 'text-red-500' : 'text-blue-500');
+                container.innerHTML += `<i class="fa-solid fa-circle ${color} text-[10px] sm:text-xs"></i>`;
+            });
+        }
+
+        /* ================= EPIC PARTICLE & ANIMATION SYSTEM ================= */
+        function triggerScreenShake() {
+            const arena = document.getElementById('battleArena');
+            arena.classList.remove('shake');
+            void arena.offsetWidth; // trigger reflow
+            arena.classList.add('shake');
+            setTimeout(() => arena.classList.remove('shake'), 450);
+        }
+
+        function showDamageNumber(targetStr, amount, isCritical = false) {
+            const arena = document.getElementById('battleArena');
+            const targetImg = document.getElementById(targetStr === 'enemy' ? 'enemySprite' : 'playerSprite');
+            const targetRect = targetImg.getBoundingClientRect();
+            const arenaRect = arena.getBoundingClientRect();
+            
+            const x = targetRect.left - arenaRect.left + targetRect.width / 2 - 20;
+            const y = targetRect.top - arenaRect.top + targetRect.height / 3;
+            
+            const dmgEl = document.createElement('div');
+            dmgEl.className = `absolute z-40 font-black font-mono pointer-events-none ${
+                isCritical ? 'text-yellow-300 text-3xl sm:text-4xl drop-shadow-[0_4px_8px_rgba(220,38,38,0.9)]' : 'text-rose-500 text-2xl sm:text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]'
+            }`;
+            dmgEl.style.left = `${x}px`;
+            dmgEl.style.top = `${y}px`;
+            dmgEl.style.animation = 'floatDamage 0.95s ease-out forwards';
+            dmgEl.innerText = isCritical ? `暴擊! -${amount}` : `-${amount}`;
+            
+            arena.appendChild(dmgEl);
+            setTimeout(() => dmgEl.remove(), 1000);
+        }
+
+        function triggerParticles(type, targetStr) {
+            const canvas = document.getElementById('fxCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const arenaRect = canvas.parentElement.getBoundingClientRect();
+            const targetImg = document.getElementById(targetStr === 'enemy' ? 'enemySprite' : 'playerSprite');
+            const attackerImg = document.getElementById(targetStr === 'enemy' ? 'playerSprite' : 'enemySprite');
+            
+            const targetRect = targetImg.getBoundingClientRect();
+            const attackerRect = attackerImg.getBoundingClientRect();
+            
+            const tx = targetRect.left - arenaRect.left + targetRect.width / 2;
+            const ty = targetRect.top - arenaRect.top + targetRect.height / 2;
+            const ax = attackerRect.left - arenaRect.left + attackerRect.width / 2;
+            const ay = attackerRect.top - arenaRect.top + attackerRect.height / 2;
+            
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
+            let particles = [];
+            let shockwaves = [];
+            let lgtLines = [];
+
+            // Configure element specific FX
+            if (type === 'fire') {
+                for (let i = 0; i < 65; i++) {
+                    particles.push({
+                        x: ax, y: ay,
+                        vx: (tx - ax) * 0.08 + (Math.random() - 0.5) * 14,
+                        vy: (ty - ay) * 0.08 + (Math.random() - 0.5) * 14,
+                        radius: Math.random() * 8 + 4,
+                        color: ['#ef4444', '#f97316', '#fbbf24', '#ffffff'][Math.floor(Math.random() * 4)],
+                        life: 1.0, decay: Math.random() * 0.03 + 0.025
+                    });
+                }
+                shockwaves.push({ x: tx, y: ty, r: 5, maxR: 70, opacity: 1, color: '#f97316' });
+            } else if (type === 'electric') {
+                for (let i = 0; i < 50; i++) {
+                    particles.push({
+                        x: tx + (Math.random() - 0.5) * targetRect.width,
+                        y: ty + (Math.random() - 0.5) * targetRect.height,
+                        vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20,
+                        radius: Math.random() * 6 + 2,
+                        color: ['#facc15', '#fef08a', '#ffffff'][Math.floor(Math.random() * 3)],
+                        life: 1.0, decay: 0.04
+                    });
+                }
+                for (let i = 0; i < 5; i++) {
+                    lgtLines.push({
+                        x1: ax, y1: ay,
+                        mx: (ax + tx) / 2 + (Math.random() - 0.5) * 100,
+                        my: (ay + ty) / 2 + (Math.random() - 0.5) * 100,
+                        x2: tx, y2: ty,
+                        life: 1.0
+                    });
+                }
+            } else if (type === 'water' || type === 'ice') {
+                for (let i = 0; i < 60; i++) {
+                    particles.push({
+                        x: ax, y: ay,
+                        vx: (tx - ax) * 0.06 + (Math.random() - 0.5) * 10,
+                        vy: (ty - ay) * 0.06 + (Math.random() - 0.5) * 10,
+                        radius: Math.random() * 7 + 3,
+                        color: ['#3b82f6', '#60a5fa', '#93c5fd', '#ffffff'][Math.floor(Math.random() * 4)],
+                        life: 1.0, decay: Math.random() * 0.03 + 0.02
+                    });
+                }
+                shockwaves.push({ x: tx, y: ty, r: 10, maxR: 80, opacity: 0.9, color: '#3b82f6' });
+            } else { // Grass, Ghost, Psychic, Normal, Dragon, etc.
+                for (let i = 0; i < 55; i++) {
+                    particles.push({
+                        x: tx, y: ty,
+                        vx: (Math.random() - 0.5) * 18,
+                        vy: (Math.random() - 0.5) * 18,
+                        radius: Math.random() * 7 + 3,
+                        color: TYPE_COLORS[type] || '#f43f5e',
+                        life: 1.0, decay: Math.random() * 0.035 + 0.025
+                    });
+                }
+                shockwaves.push({ x: tx, y: ty, r: 5, maxR: 60, opacity: 0.8, color: TYPE_COLORS[type] || '#ffffff' });
+            }
+
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                let alive = false;
+
+                // Render Lightning Lines
+                lgtLines.forEach(l => {
+                    if (l.life > 0) {
+                        alive = true;
+                        ctx.strokeStyle = '#fef08a';
+                        ctx.lineWidth = 4;
+                        ctx.shadowColor = '#eab308';
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        ctx.moveTo(l.x1, l.y1);
+                        ctx.lineTo(l.mx, l.my);
+                        ctx.lineTo(l.x2, l.y2);
+                        ctx.stroke();
+                        l.life -= 0.15;
+                    }
+                });
+
+                // Render Shockwaves
+                shockwaves.forEach(s => {
+                    if (s.r < s.maxR) {
+                        alive = true;
+                        ctx.strokeStyle = s.color;
+                        ctx.lineWidth = 6;
+                        ctx.globalAlpha = s.opacity;
+                        ctx.beginPath();
+                        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                        ctx.stroke();
+                        s.r += 6;
+                        s.opacity -= 0.05;
+                    }
+                });
+
+                // Render Particles
+                particles.forEach(p => {
+                    if (p.life > 0) {
+                        alive = true;
+                        ctx.globalAlpha = p.life;
+                        ctx.fillStyle = p.color;
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.life -= p.decay;
+                    }
+                });
+
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
+
+                if (alive) requestAnimationFrame(render);
+                else ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            render();
+        }
+
+        /* ================= BATTLE LOGIC ================= */
+        function showMoveMenu() {
+            document.getElementById('actionMenu').classList.add('hidden');
+            document.getElementById('moveMenu').classList.remove('hidden');
+            
+            const list = document.getElementById('moveList');
+            list.innerHTML = '';
+            
+            gameState.playerActive.moves.forEach((move, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "bg-slate-100 border-[3px] border-slate-300 hover:border-indigo-500 rounded-lg font-bold text-slate-800 text-xs sm:text-sm py-2 shadow-sm transition transform active:scale-95 flex flex-col items-center justify-center";
+                btn.innerHTML = `<span>${move.name}</span>`;
+                
+                const updateHover = () => {
+                    const tLabel = document.getElementById('moveTypeHover');
+                    tLabel.innerText = TYPE_TRANSLATIONS[move.type] || move.type;
+                    tLabel.style.color = TYPE_COLORS[move.type] || '#333';
+                    document.getElementById('movePowerHover').innerText = move.power;
+                };
+                
+                btn.onmouseover = updateHover;
+                btn.ontouchstart = updateHover;
+                
+                btn.onclick = () => {
+                    hideMoveMenu();
+                    executePlayerTurn(idx);
+                };
+                list.appendChild(btn);
+            });
+
+            if(gameState.playerActive.moves.length > 0) {
+                document.getElementById('moveTypeHover').innerText = TYPE_TRANSLATIONS[gameState.playerActive.moves[0].type];
+                document.getElementById('moveTypeHover').style.color = TYPE_COLORS[gameState.playerActive.moves[0].type];
+                document.getElementById('movePowerHover').innerText = gameState.playerActive.moves[0].power;
+            }
+        }
+
+        function hideMoveMenu() {
+            document.getElementById('moveMenu').classList.add('hidden');
+            document.getElementById('actionMenu').classList.remove('hidden');
+        }
+
+        async function executePlayerTurn(moveIndex) {
+            const move = gameState.playerActive.moves[moveIndex];
+            
+            // Trigger Chapter 2 Math Challenge
+            const mathResult = await triggerMathChallenge();
+            
+            if(!mathResult.success) {
+                await typeWriter(`答錯了！${gameState.playerActive.name} 陷入混亂，招式發動失敗！`);
+                enemyTurn();
+                return;
+            }
+
+            // Power Charge Animation
+            const pSprite = document.getElementById('playerSprite');
+            pSprite.classList.add('charge');
+            await typeWriter(`${gameState.playerActive.name} 解開了恆等式，招式大幅充能！`);
+            pSprite.classList.remove('charge');
+
+            await typeWriter(`${gameState.playerActive.name} 使用了 ${move.name}！`);
+            
+            // Tackle movement
+            pSprite.classList.add('tackle-player');
+            setTimeout(() => pSprite.classList.remove('tackle-player'), 400);
+            
+            // Trigger particles & hit shake
+            triggerParticles(move.type, 'enemy');
+            await new Promise(r => setTimeout(r, 250));
+            triggerScreenShake();
+
+            const eSprite = document.getElementById('enemySprite');
+            eSprite.classList.add('blink');
+            setTimeout(() => eSprite.classList.remove('blink'), 600);
+
+            // Damage calculation
+            const isCrit = mathResult.fastBonus || Math.random() < 0.25;
+            const dmg = _calcDamage(gameState.playerActive, gameState.enemyActive, move, isCrit);
+            showDamageNumber('enemy', dmg, isCrit);
+
+            gameState.enemyActive.hp = Math.max(0, gameState.enemyActive.hp - dmg);
+            updateHpBars();
+
+            await new Promise(r => setTimeout(r, 1000));
+
+            if(gameState.enemyActive.hp === 0) {
+                await handleEnemyFaint();
+            } else {
+                enemyTurn();
+            }
+        }
+
+        async function enemyTurn() {
+            if(gameState.enemyActive.fainted) return;
+            
+            const moves = gameState.enemyActive.moves;
+            const move = moves[Math.floor(Math.random() * moves.length)];
+            
+            await typeWriter(`敵方的 ${gameState.enemyActive.name} 使用了 ${move.name}！`);
+            
+            const eSprite = document.getElementById('enemySprite');
+            eSprite.classList.add('tackle-enemy');
+            setTimeout(() => eSprite.classList.remove('tackle-enemy'), 400);
+            
+            triggerParticles(move.type, 'player');
+            await new Promise(r => setTimeout(r, 250));
+            triggerScreenShake();
+
+            const pSprite = document.getElementById('playerSprite');
+            pSprite.classList.add('blink');
+            setTimeout(() => pSprite.classList.remove('blink'), 600);
+
+            const dmg = _calcDamage(gameState.enemyActive, gameState.playerActive, move, false);
+            showDamageNumber('player', dmg, false);
+
+            gameState.playerActive.hp = Math.max(0, gameState.playerActive.hp - dmg);
+            updateHpBars();
+
+            await new Promise(r => setTimeout(r, 1000));
+
+            if(gameState.playerActive.hp === 0) {
+                await handlePlayerFaint();
+            } else {
+                showActionMenu();
+            }
+        }
+
+        function _calcDamage(attacker, defender, move, isCrit) {
+            const baseDmg = (22 * move.power * (attacker.attack / defender.defense)) / 50 + 2;
+            const stab = attacker.types.includes(move.type) ? 1.5 : 1;
+            const critMult = isCrit ? 1.5 : 1.0;
+            const random = (Math.random() * 0.15) + 0.85;
+            return Math.floor(baseDmg * stab * critMult * random);
+        }
+
+        /* ================= FAINT & SWITCH LOGIC ================= */
+        async function handleEnemyFaint() {
+            gameState.enemyActive.fainted = true;
+            updatePokeballs('enemy');
+            
+            document.getElementById('enemySprite').classList.add('faint');
+            await typeWriter(`敵方的 ${gameState.enemyActive.name} 倒下了！`);
+            
+            const nextIdx = gameState.enemyTeam.findIndex(p => !p.fainted);
+            if(nextIdx !== -1) {
+                gameState.activeEnemyIdx = nextIdx;
+                updateArenaBackground();
+                updateBattleScene();
+                await typeWriter(`對手派出了 ${gameState.enemyActive.name}！`);
+                showActionMenu();
+            } else {
+                await typeWriter(`恭喜你！成功解答所有恆等式，擊敗所有對手！`);
+                document.getElementById('dialogText').innerHTML += "<br><span class='text-xs text-indigo-600 font-bold'>恭喜成為中二數學恆等式大師！重新整理網頁可再戰。</span>";
+            }
+        }
+
+        async function handlePlayerFaint() {
+            gameState.playerActive.fainted = true;
+            updatePokeballs('player');
+            
+            document.getElementById('playerSprite').classList.add('faint');
+            await typeWriter(`${gameState.playerActive.name} 失去了戰鬥能力！`);
+            
+            const nextIdx = gameState.playerTeam.findIndex(p => !p.fainted);
+            if(nextIdx !== -1) {
+                showPokemonSwitchMenu(true);
+            } else {
+                await typeWriter(`眼前一片漆黑... 請再接再厲溫習 Chapter 2！`);
+            }
+        }
+
+        function showPokemonSwitchMenu(force = false) {
+            document.getElementById('actionMenu').classList.add('hidden');
+            const modal = document.getElementById('switchModal');
+            const list = document.getElementById('partyList');
+            list.innerHTML = '';
+            
+            gameState.playerTeam.forEach((p, idx) => {
+                const isFainted = p.fainted;
+                const isActive = idx === gameState.activePlayerIdx;
+                
+                let bgClass = 'bg-slate-800 border-slate-600 hover:border-indigo-500';
+                if(isFainted) bgClass = 'bg-rose-900/50 border-rose-800 opacity-70';
+                else if(isActive) bgClass = 'bg-emerald-900/50 border-emerald-600';
+
+                list.innerHTML += `
+                    <div class="${bgClass} border-[3px] rounded-xl p-3 flex items-center justify-between transition-colors ${!isFainted && !isActive ? 'cursor-pointer' : ''}" 
+                         onclick="${!isFainted && !isActive ? `executeSwitch(${idx})` : ''}">
+                        <div class="flex items-center space-x-4">
+                            <img src="${p.frontSprite}" class="w-12 h-12 pixelated object-contain ${isFainted ? 'grayscale' : ''}">
+                            <div>
+                                <p class="text-white font-bold text-base sm:text-lg ${isFainted ? 'line-through text-slate-400' : ''}">${p.name}</p>
+                                <div class="w-24 bg-slate-700 h-1.5 rounded-full mt-1">
+                                    <div class="h-full rounded-full ${p.hp/p.maxHp > 0.5 ? 'bg-green-400' : (p.hp/p.maxHp > 0.2 ? 'bg-yellow-400' : 'bg-red-500')}" style="width: ${(p.hp/p.maxHp)*100}%"></div>
+                                </div>
+                                <p class="text-xs text-slate-300 font-mono mt-1">HP: ${Math.ceil(p.hp)}/${p.maxHp}</p>
+                            </div>
+                        </div>
+                        ${isActive ? '<span class="bg-emerald-500 text-xs px-2 py-1 rounded text-white font-bold">戰鬥中</span>' : ''}
+                        ${isFainted ? '<span class="text-xs text-rose-400 font-bold">瀕死</span>' : ''}
+                    </div>
+                `;
+            });
+
+            if(!force) {
+                list.innerHTML += `<button onclick="hideSwitchModal()" class="mt-2 bg-slate-600 text-white font-bold py-2.5 rounded-xl w-full active:scale-95 transition">取消返回</button>`;
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function hideSwitchModal() {
+            document.getElementById('switchModal').classList.add('hidden');
+            document.getElementById('switchModal').classList.remove('flex');
+            showActionMenu();
+        }
+
+        async function executeSwitch(idx) {
+            document.getElementById('switchModal').classList.add('hidden');
+            document.getElementById('switchModal').classList.remove('flex');
+            
+            const prevName = gameState.playerActive.name;
+            gameState.activePlayerIdx = idx;
+            
+            updateBattleScene();
+            
+            if(!gameState.playerTeam[gameState.activePlayerIdx].fainted && prevName !== gameState.playerActive.name) {
+                await typeWriter(`回來吧！去吧，${gameState.playerActive.name}！`);
+                enemyTurn();
+            } else {
+                await typeWriter(`去吧，${gameState.playerActive.name}！`);
+                showActionMenu();
+            }
+        }
+
+        /* ================= BOOK 2A CHAPTER 2 MATH GENERATOR ================= */
+        let questionStartTime = 0;
+
+        function triggerMathChallenge() {
+            return new Promise((resolve) => {
+                mathResolve = resolve;
+                questionStartTime = Date.now();
+                
+                const q = _generateChapter2Question();
+                
+                document.getElementById('mathQuestionText').innerText = q.question;
+                document.getElementById('mathTopicBadge').innerText = q.badge;
+                
+                const optsContainer = document.getElementById('mathOptions');
+                optsContainer.innerHTML = '';
+                
+                q.options.forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = "bg-white border-[3px] border-indigo-300 hover:border-indigo-600 hover:bg-indigo-50 text-indigo-950 font-bold font-mono py-2.5 px-3 rounded-xl text-sm sm:text-base shadow-sm active:translate-y-0.5 transition-all text-left";
+                    btn.innerText = opt;
+                    btn.onclick = () => _submitMathAnswer(idx === q.answerIndex);
+                    optsContainer.appendChild(btn);
+                });
+                
+                const feedback = document.getElementById('mathFeedback');
+                feedback.classList.add('hidden');
+                
+                const modal = document.getElementById('mathModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                
+                setTimeout(() => {
+                    document.getElementById('mathModalContent').classList.remove('scale-95');
+                    document.getElementById('mathModalContent').classList.add('scale-100');
+                }, 10);
+            });
+        }
+
+        function _submitMathAnswer(isCorrect) {
+            const timeTaken = (Date.now() - questionStartTime) / 1000;
+            const fastBonus = isCorrect && (timeTaken <= 4.5);
+            
+            const feedback = document.getElementById('mathFeedback');
+            feedback.classList.remove('hidden', 'text-emerald-600', 'bg-emerald-100', 'text-rose-600', 'bg-rose-100');
+            
+            if(isCorrect) {
+                feedback.innerText = fastBonus ? "答對了！(快速解題發動暴擊！)" : "解答正確！招式充能完畢！";
+                feedback.classList.add('text-emerald-600', 'bg-emerald-100');
+                
+                setTimeout(() => {
+                    _closeMathModal();
+                    if(mathResolve) mathResolve({ success: true, fastBonus: fastBonus });
+                }, 900);
+            } else {
+                feedback.innerText = "解答錯誤！招式發動失敗...";
+                feedback.classList.add('text-rose-600', 'bg-rose-100');
+                
+                setTimeout(() => {
+                    _closeMathModal();
+                    if(mathResolve) mathResolve({ success: false, fastBonus: false });
+                }, 1300);
+            }
+        }
+
+        function _closeMathModal() {
+            const modal = document.getElementById('mathModal');
+            document.getElementById('mathModalContent').classList.add('scale-95');
+            document.getElementById('mathModalContent').classList.remove('scale-100');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 180);
+        }
+
+        // Main Dispatcher based on Book 2A Chapter 2
+        function _generateChapter2Question() {
+            const generators = [
+                _genIdentityMeaning,
+                _genCompareCoefficients,
+                _genPerfectSquareExpansion,
+                _genDiffSquaresExpansion,
+                _genIdentityMentalMath,
+                _genCommonFactor,
+                _genFactorizeDiffSquares
+            ];
+            return generators[Math.floor(Math.random() * generators.length)]();
+        }
+
+        // 2.1 恆等式的概念與符號 ≡
+        function _genIdentityMeaning() {
+            const isIdentity = Math.random() > 0.5;
+            let qStr, ans, fake1;
+            
+            if(isIdentity) {
+                const a = Math.floor(Math.random() * 4) + 2;
+                const b = Math.floor(Math.random() * 5) + 1;
+                qStr = `判斷下列各式是否為恆等式 (Identity):\n${a}(x + ${b}) = ${a}x + ${a*b}`;
+                ans = "是恆等式 (≡)";
+                fake1 = "不是恆等式，只是普通方程 (=)";
+            } else {
+                const a = Math.floor(Math.random() * 4) + 2;
+                const b = Math.floor(Math.random() * 5) + 1;
+                qStr = `判斷下列各式是否為恆等式 (Identity):\n${a}x - ${b} = x + ${b+2}`;
+                ans = "不是恆等式，只是普通方程 (=)";
+                fake1 = "是恆等式 (≡)";
+            }
+
+            const options = _shuffleArray([ans, fake1]);
+            return {
+                badge: "2.1 恆等式的意義",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.1 比較係數法 (Comparing Coefficients)
+        function _genCompareCoefficients() {
+            const A = Math.floor(Math.random() * 5) + 2;
+            const B = Math.floor(Math.random() * 5) + 1;
+            const C = A + B;
+            
+            const qStr = `若 A(x + 1) + ${B}x ≡ ${C}x + ${A}，求未知常數 A 的值。`;
+            const ans = `A = ${A}`;
+            const fake1 = `A = ${C}`;
+            const fake2 = `A = ${Math.abs(A - B) || 1}`;
+            const fake3 = `A = ${A + 2}`;
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.1 比較係數法",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.2 完全平方展開 (a ± b)² = a² ± 2ab + b²
+        function _genPerfectSquareExpansion() {
+            const a = Math.floor(Math.random() * 3) + 1; 
+            const b = Math.floor(Math.random() * 5) + 2; 
+            const isPlus = Math.random() > 0.5;
+            const signStr = isPlus ? '+' : '-';
+            
+            const aTerm = a === 1 ? 'x' : `${a}x`;
+            const aSq = a * a;
+            const aSqStr = aSq === 1 ? 'x²' : `${aSq}x²`;
+            
+            const qStr = `展開恆等式: (${aTerm} ${signStr} ${b})²`;
+            
+            const ans = `${aSqStr} ${isPlus ? '+' : '-'} ${2*a*b}x + ${b*b}`;
+            const fake1 = `${aSqStr} + ${b*b}`;
+            const fake2 = `${aSqStr} ${isPlus ? '-' : '+'} ${2*a*b}x + ${b*b}`;
+            const fake3 = `${aSqStr} ${isPlus ? '+' : '-'} ${a*b}x + ${b*b}`;
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.2 完全平方公式",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.2 平方差展開 (a + b)(a - b) = a² - b²
+        function _genDiffSquaresExpansion() {
+            const a = Math.floor(Math.random() * 4) + 1;
+            const b = Math.floor(Math.random() * 6) + 2;
+            
+            const aTerm = a === 1 ? 'x' : `${a}x`;
+            const aSqStr = a*a === 1 ? 'x²' : `${a*a}x²`;
+            
+            const qStr = `展開恆等式: (${aTerm} + ${b})(${aTerm} - ${b})`;
+            
+            const ans = `${aSqStr} - ${b*b}`;
+            const fake1 = `${aSqStr} + ${b*b}`;
+            const fake2 = `${aSqStr} - ${2*b}x - ${b*b}`;
+            const fake3 = `${aSqStr} + ${2*a*b}x - ${b*b}`;
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.2 平方差公式",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.2 利用恆等式簡便速算 (Mental Math with Identities)
+        function _genIdentityMentalMath() {
+            const type = Math.floor(Math.random() * 2);
+            let qStr, ans, fake1, fake2, fake3;
+
+            if (type === 0) {
+                // e.g. 99^2 = (100 - 1)^2 = 10000 - 200 + 1 = 9801
+                const n = 100;
+                const diff = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+                const val = n - diff; // e.g. 99, 98, 97
+                const correct = val * val;
+                
+                qStr = `利用恆等式 (${n} - ${diff})² 計算: ${val}²`;
+                ans = `${correct}`;
+                fake1 = `${10000 - 2*n*diff}`;
+                fake2 = `${correct + 100}`;
+                fake3 = `${correct - 20}`;
+            } else {
+                // e.g. 102 * 98 = (100 + 2)(100 - 2) = 10000 - 4 = 9996
+                const d = Math.floor(Math.random() * 4) + 1;
+                const v1 = 100 + d;
+                const v2 = 100 - d;
+                const correct = v1 * v2;
+                
+                qStr = `利用恆等式 (100+${d})(100-${d}) 計算: ${v1} × ${v2}`;
+                ans = `${correct}`;
+                fake1 = `${10000 + d*d}`;
+                fake2 = `${correct - 10}`;
+                fake3 = `${10000 - d}`;
+            }
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.2 恆等式簡便計算",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.3 提取公因式 (Common Factor)
+        function _genCommonFactor() {
+            const a = Math.floor(Math.random() * 4) + 2; 
+            const b = Math.floor(Math.random() * 4) + 1; 
+            const c = Math.floor(Math.random() * 4) + 1; 
+            
+            const term1 = a * b;
+            const term2 = a * c;
+            
+            const qStr = `因式分解 (Extract Common Factor):\n${term1}x² + ${term2}x`;
+            const ans = `${a}x(${b}x + ${c})`;
+            const fake1 = `${a}(${b}x² + ${c}x)`;
+            const fake2 = `${a}x(${b}x - ${c})`;
+            const fake3 = `x(${term1}x + ${term2})`;
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.3 提取公因式",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        // 2.3 平方差因式分解 a²x² - b²y²
+        function _genFactorizeDiffSquares() {
+            const a = Math.floor(Math.random() * 5) + 2; 
+            const b = Math.floor(Math.random() * 5) + 2; 
+            
+            const qStr = `因式分解 (Factorize): ${a*a}x² - ${b*b}y²`;
+            
+            const ans = `(${a}x + ${b}y)(${a}x - ${b}y)`;
+            const fake1 = `(${a}x - ${b}y)²`;
+            const fake2 = `(${a*a}x + ${b*b}y)(${a*a}x - ${b*b}y)`;
+            const fake3 = `(${a}x + ${b}y)²`;
+
+            const options = _shuffleArray([...new Set([ans, fake1, fake2, fake3])]);
+            return {
+                badge: "2.3 平方差因式分解",
+                question: qStr,
+                options: options,
+                answerIndex: options.indexOf(ans)
+            };
+        }
+
+        function _shuffleArray(array) {
+            return array.map(value => ({ value, sort: Math.random() }))
+                        .sort((a, b) => a.sort - b.sort)
+                        .map(({ value }) => value);
+        }
+    </script>
+</body>
+</html>
